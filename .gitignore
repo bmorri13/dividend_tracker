@@ -203,6 +203,7 @@ supabase/.temp
 # Frontend specific
 /frontend/.turbo
 /frontend/.vercel
+/frontend/.mcp.json
 
 # Backend specific  
 /backend/.air
@@ -218,4 +219,4 @@ supabase/.temp
 # Local configuration files
 config.local.json
 settings.local.json
-**/.mcp.json
+*/.mcp.json
