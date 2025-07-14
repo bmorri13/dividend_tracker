@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -61,7 +65,27 @@ type UpdateHoldingRequest struct {
 	Shares int `json:"shares" binding:"required,min=1"`
 }
 
+type SupabaseJWTClaims struct {
+	Sub   string `json:"sub"`
+	Email string `json:"email"`
+	Role  string `json:"role"`
+	jwt.RegisteredClaims
+}
+
+type JWK struct {
+	Kty string `json:"kty"`
+	Use string `json:"use"`
+	Kid string `json:"kid"`
+	N   string `json:"n"`
+	E   string `json:"e"`
+}
+
+type JWKSet struct {
+	Keys []JWK `json:"keys"`
+}
+
 var db *sql.DB
+var supabaseJWKS *JWKSet
 
 type FMPQuoteResponse []struct {
 	Symbol string  `json:"symbol"`
@@ -83,6 +107,115 @@ type FMPDividendResponse []struct {
 	RecordDate       string  `json:"recordDate"`
 	PaymentDate      string  `json:"paymentDate"`
 	DeclarationDate  string  `json:"declarationDate"`
+}
+
+// For development, we'll use the Supabase JWT secret directly
+// In production, you should use JWKS verification
+func verifySupabaseJWTWithSecret(tokenString, jwtSecret string) (*SupabaseJWTClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &SupabaseJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(jwtSecret), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*SupabaseJWTClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, fmt.Errorf("invalid token")
+}
+
+func parseRSAPublicKey(n, e string) (*rsa.PublicKey, error) {
+	nBytes, err := base64.RawURLEncoding.DecodeString(n)
+	if err != nil {
+		return nil, err
+	}
+
+	eBytes, err := base64.RawURLEncoding.DecodeString(e)
+	if err != nil {
+		return nil, err
+	}
+
+	nInt := new(big.Int).SetBytes(nBytes)
+	var eInt int
+	for _, b := range eBytes {
+		eInt = eInt<<8 + int(b)
+	}
+
+	return &rsa.PublicKey{
+		N: nInt,
+		E: eInt,
+	}, nil
+}
+
+func verifySupabaseJWT(tokenString string) (*SupabaseJWTClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &SupabaseJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		kid, ok := token.Header["kid"].(string)
+		if !ok {
+			return nil, fmt.Errorf("kid header missing")
+		}
+
+		for _, key := range supabaseJWKS.Keys {
+			if key.Kid == kid {
+				return parseRSAPublicKey(key.N, key.E)
+			}
+		}
+
+		return nil, fmt.Errorf("key not found")
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*SupabaseJWTClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, fmt.Errorf("invalid token")
+}
+
+func authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			c.Abort()
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		
+		// Get JWT secret from environment
+		jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
+		if jwtSecret == "" {
+			fmt.Println("Warning: SUPABASE_JWT_SECRET not set")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Server configuration error"})
+			c.Abort()
+			return
+		}
+		
+		claims, err := verifySupabaseJWTWithSecret(tokenString, jwtSecret)
+		if err != nil {
+			fmt.Printf("JWT verification error: %v\n", err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", claims.Sub)
+		c.Set("user_email", claims.Email)
+		c.Next()
+	}
 }
 
 func fetchFMPQuote(symbol, apiKey string) (float64, string, error) {
@@ -305,7 +438,7 @@ func initDB() error {
 	return nil
 }
 
-func createHolding(ticker string, shares int, apiKey string) (*PortfolioHolding, error) {
+func createHolding(ticker string, shares int, apiKey string, userID string) (*PortfolioHolding, error) {
 	// Get current stock data
 	summary, err := getDividendSummary(ticker, apiKey, shares)
 	if err != nil {
@@ -314,8 +447,8 @@ func createHolding(ticker string, shares int, apiKey string) (*PortfolioHolding,
 
 	// Insert into database (Supabase auto-generates UUID for id)
 	query := `
-		INSERT INTO portfolio_holdings (ticker, company, shares, current_price, dividend_yield, total_value, monthly_dividend, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+		INSERT INTO portfolio_holdings (ticker, company, shares, current_price, dividend_yield, total_value, monthly_dividend, user_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
 	
@@ -328,6 +461,7 @@ func createHolding(ticker string, shares int, apiKey string) (*PortfolioHolding,
 		summary.DividendYield,
 		summary.TotalValue,
 		summary.MonthlyDividend,
+		userID,
 	).Scan(&holding.ID, &holding.CreatedAt, &holding.UpdatedAt)
 	
 	if err != nil {
@@ -346,14 +480,15 @@ func createHolding(ticker string, shares int, apiKey string) (*PortfolioHolding,
 	return &holding, nil
 }
 
-func getHoldings() ([]PortfolioHolding, error) {
+func getHoldings(userID string) ([]PortfolioHolding, error) {
 	query := `
 		SELECT id, ticker, company, shares, current_price, dividend_yield, total_value, monthly_dividend, created_at, updated_at
 		FROM portfolio_holdings
+		WHERE user_id = $1
 		ORDER BY ticker
 	`
 	
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query holdings: %v", err)
 	}
@@ -376,10 +511,10 @@ func getHoldings() ([]PortfolioHolding, error) {
 	return holdings, nil
 }
 
-func updateHolding(id string, shares int, apiKey string) (*PortfolioHolding, error) {
+func updateHolding(id string, shares int, apiKey string, userID string) (*PortfolioHolding, error) {
 	// First get the current holding to get the ticker
 	var ticker string
-	err := db.QueryRow("SELECT ticker FROM portfolio_holdings WHERE id = $1", id).Scan(&ticker)
+	err := db.QueryRow("SELECT ticker FROM portfolio_holdings WHERE id = $1 AND user_id = $2", id, userID).Scan(&ticker)
 	if err != nil {
 		return nil, fmt.Errorf("holding not found: %v", err)
 	}
@@ -394,7 +529,7 @@ func updateHolding(id string, shares int, apiKey string) (*PortfolioHolding, err
 	query := `
 		UPDATE portfolio_holdings 
 		SET shares = $1, current_price = $2, dividend_yield = $3, total_value = $4, monthly_dividend = $5, updated_at = NOW()
-		WHERE id = $6
+		WHERE id = $6 AND user_id = $7
 		RETURNING id, ticker, company, shares, current_price, dividend_yield, total_value, monthly_dividend, created_at, updated_at
 	`
 	
@@ -406,6 +541,7 @@ func updateHolding(id string, shares int, apiKey string) (*PortfolioHolding, err
 		summary.TotalValue,
 		summary.MonthlyDividend,
 		id,
+		userID,
 	).Scan(
 		&holding.ID, &holding.Ticker, &holding.Company, &holding.Shares,
 		&holding.CurrentPrice, &holding.DividendYield, &holding.TotalValue,
@@ -419,8 +555,8 @@ func updateHolding(id string, shares int, apiKey string) (*PortfolioHolding, err
 	return &holding, nil
 }
 
-func deleteHolding(id string) error {
-	result, err := db.Exec("DELETE FROM portfolio_holdings WHERE id = $1", id)
+func deleteHolding(id string, userID string) error {
+	result, err := db.Exec("DELETE FROM portfolio_holdings WHERE id = $1 AND user_id = $2", id, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete holding: %v", err)
 	}
@@ -437,14 +573,14 @@ func deleteHolding(id string) error {
 	return nil
 }
 
-func refreshHoldings(apiKey string) error {
-	holdings, err := getHoldings()
+func refreshHoldings(apiKey string, userID string) error {
+	holdings, err := getHoldings(userID)
 	if err != nil {
 		return fmt.Errorf("failed to get holdings: %v", err)
 	}
 
 	for _, holding := range holdings {
-		_, err := updateHolding(holding.ID, holding.Shares, apiKey)
+		_, err := updateHolding(holding.ID, holding.Shares, apiKey, userID)
 		if err != nil {
 			fmt.Printf("Warning: failed to refresh holding %s: %v\n", holding.Ticker, err)
 		}
@@ -474,6 +610,15 @@ func main() {
 		defer db.Close()
 	}
 
+	// Check if SUPABASE_JWT_SECRET is set
+	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
+	if jwtSecret == "" {
+		fmt.Println("Warning: SUPABASE_JWT_SECRET environment variable not set")
+		fmt.Println("Please add your Supabase JWT secret to the .env file")
+	} else {
+		fmt.Println("Supabase JWT secret loaded successfully")
+	}
+
 	r := gin.Default()
 
 	// Add CORS middleware
@@ -497,18 +642,22 @@ func main() {
 				"GET /stockTicker?symbol=<TICKER>",
 				"GET /dividends?symbol=<TICKER>",
 				"GET /dividendSummary?symbol=<TICKER>&shares=<SHARES>",
-				"GET /portfolio",
-				"POST /portfolio",
-				"PUT /portfolio/:id",
-				"DELETE /portfolio/:id",
-				"POST /portfolio/refresh",
+				"GET /portfolio (requires auth)",
+				"POST /portfolio (requires auth)",
+				"PUT /portfolio/:id (requires auth)",
+				"DELETE /portfolio/:id (requires auth)",
+				"POST /portfolio/refresh (requires auth)",
 			},
 		})
 	})
 
-	// Portfolio CRUD endpoints
-	r.GET("/portfolio", func(c *gin.Context) {
-		holdings, err := getHoldings()
+	// Portfolio CRUD endpoints (protected)
+	protected := r.Group("/portfolio")
+	protected.Use(authMiddleware())
+	
+	protected.GET("", func(c *gin.Context) {
+		userID := c.GetString("user_id")
+		holdings, err := getHoldings(userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -516,7 +665,8 @@ func main() {
 		c.JSON(http.StatusOK, holdings)
 	})
 
-	r.POST("/portfolio", func(c *gin.Context) {
+	protected.POST("", func(c *gin.Context) {
+		userID := c.GetString("user_id")
 		var req CreateHoldingRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -524,7 +674,7 @@ func main() {
 		}
 
 		// Check if holding already exists
-		holdings, err := getHoldings()
+		holdings, err := getHoldings(userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing holdings"})
 			return
@@ -537,7 +687,7 @@ func main() {
 			}
 		}
 
-		holding, err := createHolding(req.Ticker, req.Shares, apiKey)
+		holding, err := createHolding(req.Ticker, req.Shares, apiKey, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -546,7 +696,8 @@ func main() {
 		c.JSON(http.StatusCreated, holding)
 	})
 
-	r.PUT("/portfolio/:id", func(c *gin.Context) {
+	protected.PUT("/:id", func(c *gin.Context) {
+		userID := c.GetString("user_id")
 		id := c.Param("id")
 		if id == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
@@ -559,7 +710,7 @@ func main() {
 			return
 		}
 
-		holding, err := updateHolding(id, req.Shares, apiKey)
+		holding, err := updateHolding(id, req.Shares, apiKey, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -568,14 +719,15 @@ func main() {
 		c.JSON(http.StatusOK, holding)
 	})
 
-	r.DELETE("/portfolio/:id", func(c *gin.Context) {
+	protected.DELETE("/:id", func(c *gin.Context) {
+		userID := c.GetString("user_id")
 		id := c.Param("id")
 		if id == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
 			return
 		}
 
-		err := deleteHolding(id)
+		err := deleteHolding(id, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -584,14 +736,15 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"message": "Holding deleted successfully"})
 	})
 
-	r.POST("/portfolio/refresh", func(c *gin.Context) {
-		err := refreshHoldings(apiKey)
+	protected.POST("/refresh", func(c *gin.Context) {
+		userID := c.GetString("user_id")
+		err := refreshHoldings(apiKey, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		holdings, err := getHoldings()
+		holdings, err := getHoldings(userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get updated holdings"})
 			return

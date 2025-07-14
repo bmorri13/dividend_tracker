@@ -218,4 +218,56 @@ supabase/.temp
 # Local configuration files
 config.local.json
 settings.local.json
+
+# MCP configuration (may contain sensitive tokens)
 **/.mcp.json
+frontend/.mcp.json
+
+# Docker volumes and runtime data
+docker-data/
+volumes/
+
+# Security and testing files - INTENTIONALLY INCLUDED in public repo
+# These files demonstrate security best practices and are safe to share:
+# ✅ security_analysis.md - Shows security awareness
+# ✅ test_auth.md - Demonstrates testing approach  
+# ✅ database_migration.sql - Required for setup
+# ✅ verify_migration.sql - Quality assurance tool
+# ✅ Makefile - Essential for Docker management
+# ✅ All Docker documentation files
+
+# Files that SHOULD be excluded (contain sensitive data):
+# ❌ .mcp.json files - May contain API tokens
+# ❌ .env files - Contain secrets and API keys
+
+# Development tools
+.air.toml
+.vscode/settings.json
+.fleet/
+*.code-workspace
+
+# Hot reload files
+**/*.hot-update.*
+.turbo/
+
+# Debug files
+debug
+debug.test
+__debug_bin*
+
+# Certificate files (if any)
+*.pem
+*.crt
+*.key
+*.p12
+
+# Backup and temporary files
+*~
+.#*
+\#*#
+.*.swp
+.*.swo
+
+# Docker override files (user-specific)
+docker-compose.local.yml
+docker-compose.*.local.yml

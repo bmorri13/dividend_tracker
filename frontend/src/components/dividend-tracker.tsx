@@ -5,13 +5,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { PieChart } from "@/components/ui/pie-chart"
 import { DividendBarChart } from "@/components/ui/dividend-bar-chart"
-import { TrendingUp, DollarSign, PieChart as PieChartIcon, BarChart3, Trash2, Edit3 } from "lucide-react"
+import { TrendingUp, DollarSign, PieChart as PieChartIcon, BarChart3, Trash2, Edit3, LogOut, User } from "lucide-react"
 import { useEffect, useState } from "react"
 import { ApiService, DividendSummary, PortfolioHolding } from "../../lib/api"
 import { ConfirmModal, AlertModal } from "@/components/ui/modal"
 import { EditSharesDialog } from "@/components/ui/edit-shares-dialog"
 import { AddStockDialog } from "@/components/ui/add-stock-dialog"
 import { LoadingPage } from "@/components/ui/loading-spinner"
+import { useAuth } from "@/lib/auth-context"
+import { Button } from "@/components/ui/button"
 
 // Colors for charts
 const COLORS = [
@@ -53,6 +55,7 @@ interface Holding {
 }
 
 export default function DividendTracker() {
+  const { user, signOut } = useAuth()
   const [portfolioData, setPortfolioData] = useState<PortfolioHolding[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -142,7 +145,7 @@ export default function DividendTracker() {
       })
       
       // Add to local state
-      setPortfolioData(prev => [...prev, newHolding])
+      setPortfolioData(prev => [...(prev || []), newHolding])
     } catch (error) {
       console.error('Error adding stock:', error)
       throw new Error(`Failed to add ${symbol}. Please check the symbol is valid.`)
@@ -157,7 +160,7 @@ export default function DividendTracker() {
         try {
           await ApiService.deletePortfolioHolding(id)
           // Remove from local state
-          setPortfolioData(prev => prev.filter(h => h.id !== id))
+          setPortfolioData(prev => (prev || []).filter(h => h.id !== id))
         } catch (error) {
           console.error('Error removing stock:', error)
           showAlert('Error', 'Failed to remove stock from portfolio', 'error')
@@ -170,7 +173,7 @@ export default function DividendTracker() {
     try {
       const updatedHolding = await ApiService.updatePortfolioHolding(id, { shares: newShares })
       // Update local state
-      setPortfolioData(prev => prev.map(h => h.id === id ? updatedHolding : h))
+      setPortfolioData(prev => (prev || []).map(h => h.id === id ? updatedHolding : h))
     } catch (error) {
       console.error('Error updating shares:', error)
       showAlert('Error', 'Failed to update shares', 'error')
@@ -198,19 +201,19 @@ export default function DividendTracker() {
     )
   }
 
-  // Calculate totals and averages
-  const totalPortfolioValue = portfolioData.reduce((sum, stock) => sum + stock.total_value, 0)
-  const totalMonthlyDividends = portfolioData.reduce((sum, stock) => sum + stock.monthly_dividend, 0)
-  const averageDividendYield = portfolioData.length > 0 
+  // Calculate totals and averages with null checks
+  const totalPortfolioValue = portfolioData?.reduce((sum, stock) => sum + stock.total_value, 0) || 0
+  const totalMonthlyDividends = portfolioData?.reduce((sum, stock) => sum + stock.monthly_dividend, 0) || 0
+  const averageDividendYield = portfolioData && portfolioData.length > 0 
     ? portfolioData.reduce((sum, stock) => sum + stock.dividend_yield, 0) / portfolioData.length 
     : 0
 
-  // Prepare pie chart data
-  const pieChartData = portfolioData.map((stock) => ({
+  // Prepare pie chart data with null checks
+  const pieChartData = portfolioData?.map((stock) => ({
     name: stock.ticker,
     value: stock.total_value,
     percentage: ((stock.total_value / totalPortfolioValue) * 100).toFixed(1),
-  }))
+  })) || []
 
   // Generate dynamic monthly dividend data
   const monthlyDividendData = generateMonthlyDividendData(totalMonthlyDividends)
@@ -219,9 +222,26 @@ export default function DividendTracker() {
     <div className="min-h-screen bg-gray-900 text-white p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Dividend Portfolio Tracker</h1>
-          <p className="text-muted-foreground">Track your dividend-paying investments and monthly income</p>
+        <div className="flex justify-between items-center mb-6">
+          <div className="text-center flex-1">
+            <h1 className="text-3xl font-bold tracking-tight">Dividend Portfolio Tracker</h1>
+            <p className="text-muted-foreground">Track your dividend-paying investments and monthly income</p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 text-sm text-gray-300">
+              <User className="h-4 w-4" />
+              <span>{user?.email}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => signOut()}
+              className="flex items-center space-x-2 border-gray-600 text-gray-300 hover:bg-gray-700"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -272,21 +292,21 @@ export default function DividendTracker() {
                 <CardDescription className="text-gray-400">Add or remove stocks from your portfolio</CardDescription>
               </div>
               <AddStockDialog 
-                holdings={portfolioData.map(h => ({symbol: h.ticker, shares: h.shares}))} 
+                holdings={portfolioData?.map(h => ({symbol: h.ticker, shares: h.shares})) || []} 
                 onAdd={addStock} 
               />
             </div>
           </CardHeader>
           <CardContent>
 
-            {portfolioData.length === 0 ? (
+            {!portfolioData || portfolioData.length === 0 ? (
               <div className="text-center py-8 text-gray-400">
                 <p>No stocks in your portfolio yet.</p>
                 <p className="text-sm mt-2">Click &quot;Add Stock&quot; to get started!</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {portfolioData.map((holding) => (
+                {portfolioData?.map((holding) => (
                   <div key={holding.ticker} className="bg-gray-750 rounded-lg p-4 border border-gray-600">
                     <div className="flex justify-between items-start mb-2">
                       <Badge variant="outline" className="border-gray-500 text-gray-200">
@@ -371,7 +391,7 @@ export default function DividendTracker() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {portfolioData.map((stock) => (
+                  {portfolioData?.map((stock) => (
                     <TableRow key={stock.ticker} className="border-gray-700 hover:bg-gray-750">
                       <TableCell className="font-medium">
                         <Badge variant="outline" className="border-gray-600 text-gray-200">

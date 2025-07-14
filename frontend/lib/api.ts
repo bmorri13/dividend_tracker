@@ -47,8 +47,32 @@ export interface UpdateHoldingRequest {
 }
 
 export class ApiService {
+  private static async getAuthHeaders(): Promise<HeadersInit> {
+    const { supabase } = await import('./supabase')
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    }
+    
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`
+    }
+    
+    return headers
+  }
+
   private static async fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(url, options)
+    const authHeaders = await this.getAuthHeaders()
+    const mergedOptions = {
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...options?.headers,
+      },
+    }
+    
+    const response = await fetch(url, mergedOptions)
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
@@ -88,9 +112,6 @@ export class ApiService {
     const url = `${API_BASE_URL}/portfolio`
     return this.fetchJson<PortfolioHolding>(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(data),
     })
   }
@@ -99,9 +120,6 @@ export class ApiService {
     const url = `${API_BASE_URL}/portfolio/${id}`
     return this.fetchJson<PortfolioHolding>(url, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(data),
     })
   }

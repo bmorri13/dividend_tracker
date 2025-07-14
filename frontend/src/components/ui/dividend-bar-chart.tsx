@@ -79,7 +79,7 @@ export function DividendBarChart({ data }: DividendBarChartProps) {
                 offset={12}
                 className="fill-foreground"
                 fontSize={12}
-                formatter={(value: number) => `$${value.toFixed(0)}`}
+                formatter={(value: any) => `$${Number(value).toFixed(0)}`}
               />
             </Bar>
           </BarChart>

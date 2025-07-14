@@ -1,9 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
+import type { Database } from './database.types'
 
 const supabaseUrl = 'https://fidqudcxjycexlmjwkvm.supabase.co'
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpZHF1ZGN4anljZXhsbWp3a3ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzNTg3NjEsImV4cCI6MjA2NzkzNDc2MX0.oc97-igqaNtgnubh-jr4_K2dEyqONZdcY4cUdI029mA'
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+})
 
 export interface PortfolioHolding {
   id?: string
