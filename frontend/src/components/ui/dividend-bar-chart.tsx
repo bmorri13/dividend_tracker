@@ -1,13 +1,11 @@
 "use client"
 
-import { TrendingUp } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis } from "recharts"
 
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -37,10 +35,9 @@ export function DividendBarChart({ data }: DividendBarChartProps) {
   }))
 
   // Calculate trending percentage (comparing last vs first month)
-  const firstMonth = data[0]?.value || 0
-  const lastMonth = data[data.length - 1]?.value || 0
-  const trendPercentage = firstMonth > 0 ? ((lastMonth - firstMonth) / firstMonth * 100) : 0
-  const isTrendingUp = trendPercentage > 0
+  // const firstMonth = data[0]?.value || 0
+  // const lastMonth = data[data.length - 1]?.value || 0
+  // const trendPercentage = firstMonth > 0 ? ((lastMonth - firstMonth) / firstMonth * 100) : 0
 
   return (
     <Card className="bg-gray-800 border-gray-700">
@@ -79,7 +76,7 @@ export function DividendBarChart({ data }: DividendBarChartProps) {
                 offset={12}
                 className="fill-foreground"
                 fontSize={12}
-                formatter={(value: any) => `$${Number(value).toFixed(0)}`}
+                formatter={(value) => `$${Number(value).toFixed(0)}`}
               />
             </Bar>
           </BarChart>

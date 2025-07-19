@@ -18,8 +18,6 @@ export function SimpleBarChart({ data, className, onHover }: SimpleBarChartProps
   const [hoveredBar, setHoveredBar] = React.useState<string | null>(null)
   
   const maxValue = Math.max(...data.map(item => item.value))
-  const minValue = 0
-  const range = maxValue - minValue
   
   // Generate nice y-axis labels with round numbers
   const getYAxisLabels = () => {

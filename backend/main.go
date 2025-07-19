@@ -590,10 +590,12 @@ func refreshHoldings(apiKey string, userID string) error {
 }
 
 func main() {
-	// Load .env file
-	err := godotenv.Load()
+	// Load .env file from project root (for local development)
+	// In Docker, environment variables are injected via docker-compose
+	err := godotenv.Load("../.env")
 	if err != nil {
-		fmt.Println("Warning: Error loading .env file")
+		// Silently continue - environment variables may be injected by Docker
+		fmt.Println("Info: No .env file found, using environment variables")
 	}
 
 	apiKey := os.Getenv("FMP_API_KEY")

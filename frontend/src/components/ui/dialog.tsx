@@ -67,7 +67,7 @@ const DialogTrigger = ({ children, asChild = false }: DialogTriggerProps) => {
   if (asChild) {
     return React.cloneElement(children as React.ReactElement, {
       onClick: () => onOpenChange(true)
-    } as any)
+    } as Record<string, unknown>)
   }
 
   return (
@@ -169,7 +169,7 @@ const DialogClose = ({ children, asChild = false }: DialogCloseProps) => {
   if (asChild) {
     return React.cloneElement(children as React.ReactElement, {
       onClick: () => onOpenChange(false)
-    } as any)
+    } as Record<string, unknown>)
   }
 
   return (
