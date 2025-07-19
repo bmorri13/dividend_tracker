@@ -7,7 +7,7 @@ import { PieChart } from "@/components/ui/pie-chart"
 import { DividendBarChart } from "@/components/ui/dividend-bar-chart"
 import { TrendingUp, DollarSign, PieChart as PieChartIcon, BarChart3, Trash2, Edit3, LogOut, User } from "lucide-react"
 import { useEffect, useState } from "react"
-import { ApiService, DividendSummary, PortfolioHolding } from "../../lib/api"
+import { ApiService, PortfolioHolding } from "../../lib/api"
 import { ConfirmModal, AlertModal } from "@/components/ui/modal"
 import { EditSharesDialog } from "@/components/ui/edit-shares-dialog"
 import { AddStockDialog } from "@/components/ui/add-stock-dialog"
@@ -42,17 +42,7 @@ const generateMonthlyDividendData = (monthlyTotal: number) => [
   { name: "Dec", value: monthlyTotal * 1.33 }, // Highest month - quarter end + year-end
 ]
 
-// Default portfolio holdings
-const DEFAULT_HOLDINGS = [
-  { symbol: 'AAPL', shares: 100 },
-  { symbol: 'MSFT', shares: 50 },
-  { symbol: 'JNJ', shares: 75 }
-]
 
-interface Holding {
-  symbol: string
-  shares: number
-}
 
 export default function DividendTracker() {
   const { user, signOut } = useAuth()
