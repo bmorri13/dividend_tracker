@@ -186,7 +186,7 @@ The application uses Supabase for user authentication. The Go backend validates 
 
 ```plaintext
 Email:    bryanmorrison017+div_user1@gmail.com
-Password: Holepuncher75!
+Password: TESTTESTTEST
 ```
 
 This test user account has access to demo holdings and can be used to test all portfolio-related API calls.
