@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
+import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
 interface AuthContextType {
@@ -20,6 +21,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     const getSession = async () => {
@@ -36,11 +39,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session)
         setUser(session?.user ?? null)
         setLoading(false)
+        
+        // Redirect to portfolio after successful sign in
+        if (event === 'SIGNED_IN' && session?.user && pathname === '/') {
+          router.push('/portfolio')
+        }
+        
+        // Redirect to home after sign out
+        if (event === 'SIGNED_OUT' && pathname === '/portfolio') {
+          router.push('/')
+        }
       }
     )
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [router, pathname])
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
