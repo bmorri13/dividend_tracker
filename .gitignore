@@ -47,6 +47,7 @@ jspm_packages/
 .env
 .env.local
 .env.development.local
+.env.test
 .env.test.local
 .env.production.local
 .env.*.local
@@ -214,6 +215,12 @@ supabase/.temp
 **/*key*
 **/*token*
 **/credentials.json
+
+# Testing credentials and configs
+**/test-credentials.json
+**/test-config.json
+**/.test-env
+**/playwright.env
 
 # Local configuration files
 config.local.json

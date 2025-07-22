@@ -182,14 +182,15 @@ The application uses Supabase for user authentication. The Go backend validates 
 - All functionality should be tested using `docker-compose up` locally.
 - End-to-end tests should be driven by **Playwright** using the **MCP server**.
 - Validate login, adding holdings, updating, deleting, and refreshing.
-- For authentication testing, use:
+- For authentication testing, create a `.env.test` file (ignored by git) with:
 
-```plaintext
-Email:    bryanmorrison017+div_user1@gmail.com
-Password: TESTTESTTEST
+```bash
+# .env.test - Testing credentials (create locally, not committed)
+TEST_EMAIL=your_test_email@example.com
+TEST_PASSWORD=your_test_password
 ```
 
-This test user account has access to demo holdings and can be used to test all portfolio-related API calls.
+This test user account should have access to demo holdings and can be used to test all portfolio-related API calls.
 
 ---
 

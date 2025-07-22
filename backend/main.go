@@ -406,39 +406,121 @@ func initDB() error {
 		return fmt.Errorf("DATABASE_URL environment variable is required")
 	}
 
-	// Add IPv4 preference to the connection string
-	if !strings.Contains(dbURL, "?") {
-		dbURL += "?sslmode=require"
-	}
-	if !strings.Contains(dbURL, "sslmode") {
-		dbURL += "&sslmode=require"
+	// Check connection type: direct (port 5432), pooler transaction mode (port 6543), or session mode (port 5432 with pooler)
+	isDirectConnection := strings.Contains(dbURL, ":5432") && !strings.Contains(dbURL, "pooler")
+	isSessionMode := strings.Contains(dbURL, "pooler") && strings.Contains(dbURL, ":5432")
+	isTransactionMode := strings.Contains(dbURL, "pooler") && strings.Contains(dbURL, ":6543")
+	
+	// Configure URL parameters based on connection type
+	// For SCRAM-SHA-256 authentication, we need to ensure proper SSL and auth settings
+	if isDirectConnection {
+		// Direct connections to Supabase require SSL
+		if !strings.Contains(dbURL, "?") {
+			dbURL += "?sslmode=require&application_name=dividend_tracker"
+		} else {
+			if !strings.Contains(dbURL, "sslmode") {
+				dbURL += "&sslmode=require"
+			}
+			if !strings.Contains(dbURL, "application_name") {
+				dbURL += "&application_name=dividend_tracker"
+			}
+		}
+	} else if isSessionMode {
+		// Session mode (Supavisor) - requires specific parameters for session pooling
+		// SCRAM-SHA-256 requires proper SSL configuration
+		if !strings.Contains(dbURL, "?") {
+			dbURL += "?sslmode=require&application_name=dividend_tracker"
+		} else {
+			if !strings.Contains(dbURL, "sslmode") {
+				dbURL += "&sslmode=require"
+			}
+			if !strings.Contains(dbURL, "application_name") {
+				dbURL += "&application_name=dividend_tracker"
+			}
+		}
+	} else if isTransactionMode {
+		// Transaction mode pooler connections - optimized for SCRAM-SHA-256
+		if !strings.Contains(dbURL, "connect_timeout") {
+			if strings.Contains(dbURL, "?") {
+				dbURL += "&connect_timeout=15"
+			} else {
+				dbURL += "?connect_timeout=15"
+			}
+		}
+		if !strings.Contains(dbURL, "application_name") {
+			dbURL += "&application_name=dividend_tracker"
+		}
+		// For transaction mode, we may need to specify the auth method explicitly
+		if !strings.Contains(dbURL, "auth_method") {
+			dbURL += "&auth_method=scram-sha-256"
+		}
 	}
 
+	fmt.Printf("Attempting database connection to: %s\n", strings.Split(dbURL, "@")[1]) // Log without credentials
+	
+	// Add connection debugging
+	if isSessionMode {
+		fmt.Println("Detected Supavisor Session Mode connection")
+	} else if isTransactionMode {
+		fmt.Println("Detected Supavisor Transaction Mode connection")
+	} else {
+		fmt.Println("Detected Direct connection")
+	}
+	
 	var err error
 	db, err = sql.Open("postgres", dbURL)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %v", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	db.SetConnMaxIdleTime(2 * time.Minute)
+	// Configure connection pool based on connection type
+	if isDirectConnection {
+		// Direct connection - conservative settings
+		db.SetMaxOpenConns(5)
+		db.SetMaxIdleConns(2)
+		db.SetConnMaxLifetime(5 * time.Minute)
+		db.SetConnMaxIdleTime(1 * time.Minute)
+	} else if isSessionMode {
+		// Session mode - can handle more connections but with longer lifetimes
+		db.SetMaxOpenConns(20)
+		db.SetMaxIdleConns(5)
+		db.SetConnMaxLifetime(30 * time.Minute) // Longer lifetime for session mode
+		db.SetConnMaxIdleTime(5 * time.Minute)
+	} else {
+		// Transaction mode - optimized for Supavisor transaction pooling
+		db.SetMaxOpenConns(15)
+		db.SetMaxIdleConns(3)
+		db.SetConnMaxLifetime(10 * time.Minute)
+		db.SetConnMaxIdleTime(1 * time.Minute)
+	}
 
-	// Test the connection with timeout
+	// Test the connection with timeout and better error handling
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	
 	if err = db.PingContext(ctx); err != nil {
+		// Check if it's a SCRAM authentication error
+		if strings.Contains(err.Error(), "SCRAM-SHA-256") {
+			return fmt.Errorf("SCRAM-SHA-256 authentication failed. Please verify your DATABASE_URL password is correct in .env file. Original error: %v", err)
+		}
 		return fmt.Errorf("failed to ping database: %v", err)
 	}
 
-	fmt.Println("Connected to database successfully")
+	if isSessionMode {
+		fmt.Println("Connected to database successfully (Session Mode)")
+	} else if isTransactionMode {
+		fmt.Println("Connected to database successfully (Transaction Mode)")
+	} else {
+		fmt.Println("Connected to database successfully (Direct Connection)")
+	}
 	return nil
 }
 
 func createHolding(ticker string, shares int, apiKey string, userID string) (*PortfolioHolding, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database unavailable - cannot create holdings")
+	}
+	
 	// Get current stock data
 	summary, err := getDividendSummary(ticker, apiKey, shares)
 	if err != nil {
@@ -512,6 +594,10 @@ func getHoldings(userID string) ([]PortfolioHolding, error) {
 }
 
 func updateHolding(id string, shares int, apiKey string, userID string) (*PortfolioHolding, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database unavailable - cannot update holdings")
+	}
+	
 	// First get the current holding to get the ticker
 	var ticker string
 	err := db.QueryRow("SELECT ticker FROM portfolio_holdings WHERE id = $1 AND user_id = $2", id, userID).Scan(&ticker)
@@ -556,6 +642,10 @@ func updateHolding(id string, shares int, apiKey string, userID string) (*Portfo
 }
 
 func deleteHolding(id string, userID string) error {
+	if db == nil {
+		return fmt.Errorf("database unavailable - cannot delete holdings")
+	}
+	
 	result, err := db.Exec("DELETE FROM portfolio_holdings WHERE id = $1 AND user_id = $2", id, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete holding: %v", err)
