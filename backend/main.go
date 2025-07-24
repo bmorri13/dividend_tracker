@@ -727,24 +727,45 @@ func main() {
 		c.Next()
 	})
 
+	// Root endpoint (health check)
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"endpoints": []string{
-				"GET /",
-				"GET /stockTicker?symbol=<TICKER>",
-				"GET /dividends?symbol=<TICKER>",
-				"GET /dividendSummary?symbol=<TICKER>&shares=<SHARES>",
-				"GET /portfolio (requires auth)",
-				"POST /portfolio (requires auth)",
-				"PUT /portfolio/:id (requires auth)",
-				"DELETE /portfolio/:id (requires auth)",
-				"POST /portfolio/refresh (requires auth)",
+				"GET /api/",
+				"GET /api/stockTicker?symbol=<TICKER>",
+				"GET /api/dividends?symbol=<TICKER>",
+				"GET /api/dividendSummary?symbol=<TICKER>&shares=<SHARES>",
+				"GET /api/portfolio (requires auth)",
+				"POST /api/portfolio (requires auth)",
+				"PUT /api/portfolio/:id (requires auth)",
+				"DELETE /api/portfolio/:id (requires auth)",
+				"POST /api/portfolio/refresh (requires auth)",
+			},
+		})
+	})
+
+	// API group
+	api := r.Group("/api")
+	
+	// API info endpoint
+	api.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"endpoints": []string{
+				"GET /api/",
+				"GET /api/stockTicker?symbol=<TICKER>",
+				"GET /api/dividends?symbol=<TICKER>",
+				"GET /api/dividendSummary?symbol=<TICKER>&shares=<SHARES>",
+				"GET /api/portfolio (requires auth)",
+				"POST /api/portfolio (requires auth)",
+				"PUT /api/portfolio/:id (requires auth)",
+				"DELETE /api/portfolio/:id (requires auth)",
+				"POST /api/portfolio/refresh (requires auth)",
 			},
 		})
 	})
 
 	// Portfolio CRUD endpoints (protected)
-	protected := r.Group("/portfolio")
+	protected := api.Group("/portfolio")
 	protected.Use(authMiddleware())
 	
 	protected.GET("", func(c *gin.Context) {
@@ -848,7 +869,7 @@ func main() {
 		})
 	})
 
-	r.GET("/stockTicker", func(c *gin.Context) {
+	api.GET("/stockTicker", func(c *gin.Context) {
 		symbol := c.Query("symbol")
 		if symbol == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "symbol query parameter is required"})
@@ -864,7 +885,7 @@ func main() {
 		c.JSON(http.StatusOK, quote)
 	})
 
-	r.GET("/dividends", func(c *gin.Context) {
+	api.GET("/dividends", func(c *gin.Context) {
 		symbol := c.Query("symbol")
 		if symbol == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "symbol query parameter is required"})
@@ -880,7 +901,7 @@ func main() {
 		c.JSON(http.StatusOK, dividendData)
 	})
 
-	r.GET("/dividendSummary", func(c *gin.Context) {
+	api.GET("/dividendSummary", func(c *gin.Context) {
 		symbol := c.Query("symbol")
 		if symbol == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "symbol query parameter is required"})

@@ -185,25 +185,40 @@ export default function DividendTracker() {
         <div className="text-center space-y-4">
           <div className="text-xl text-red-400">Error loading portfolio data</div>
           <div className="text-gray-400">{error}</div>
-          <div className="text-sm text-gray-500">Make sure the Go backend is running on port 8080</div>
+          <div className="text-sm text-gray-500">Check that your environment variables are configured correctly</div>
         </div>
       </div>
     )
   }
 
-  // Calculate totals and averages with null checks
-  const totalPortfolioValue = portfolioData?.reduce((sum, stock) => sum + stock.total_value, 0) || 0
-  const totalMonthlyDividends = portfolioData?.reduce((sum, stock) => sum + stock.monthly_dividend, 0) || 0
+  // Calculate totals and averages with null checks and type safety
+  const totalPortfolioValue = portfolioData?.reduce((sum, stock) => {
+    const value = typeof stock.total_value === 'number' ? stock.total_value : parseFloat(stock.total_value) || 0
+    return sum + value
+  }, 0) || 0
+  
+  const totalMonthlyDividends = portfolioData?.reduce((sum, stock) => {
+    const dividend = typeof stock.monthly_dividend === 'number' ? stock.monthly_dividend : parseFloat(stock.monthly_dividend) || 0
+    return sum + dividend
+  }, 0) || 0
+  
   const averageDividendYield = portfolioData && portfolioData.length > 0 
-    ? portfolioData.reduce((sum, stock) => sum + stock.dividend_yield, 0) / portfolioData.length 
+    ? portfolioData.reduce((sum, stock) => {
+        const yield_ = typeof stock.dividend_yield === 'number' ? stock.dividend_yield : parseFloat(stock.dividend_yield) || 0
+        return sum + yield_
+      }, 0) / portfolioData.length 
     : 0
 
-  // Prepare pie chart data with null checks
-  const pieChartData = portfolioData?.map((stock) => ({
-    name: stock.ticker,
-    value: stock.total_value,
-    percentage: ((stock.total_value / totalPortfolioValue) * 100).toFixed(1),
-  })) || []
+  // Prepare pie chart data with null checks and type safety
+  const pieChartData = portfolioData?.map((stock) => {
+    const stockValue = typeof stock.total_value === 'number' ? stock.total_value : parseFloat(stock.total_value) || 0
+    const percentage = totalPortfolioValue > 0 ? (stockValue / totalPortfolioValue) * 100 : 0
+    return {
+      name: stock.ticker,
+      value: stockValue,
+      percentage: percentage.toFixed(1),
+    }
+  }) || []
 
   // Generate dynamic monthly dividend data
   const monthlyDividendData = generateMonthlyDividendData(totalMonthlyDividends)
@@ -390,24 +405,26 @@ export default function DividendTracker() {
                       </TableCell>
                       <TableCell className="text-gray-200">{stock.company}</TableCell>
                       <TableCell className="text-right text-gray-200">{stock.shares}</TableCell>
-                      <TableCell className="text-right text-gray-200">${stock.current_price.toFixed(2)}</TableCell>
+                      <TableCell className="text-right text-gray-200">
+                        ${(typeof stock.current_price === 'number' ? stock.current_price : parseFloat(stock.current_price) || 0).toFixed(2)}
+                      </TableCell>
                       <TableCell className="text-right font-medium text-gray-200">
-                        ${stock.total_value.toLocaleString()}
+                        ${(typeof stock.total_value === 'number' ? stock.total_value : parseFloat(stock.total_value) || 0).toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge
-                          variant={stock.dividend_yield >= 3 ? "default" : "secondary"}
+                          variant={(typeof stock.dividend_yield === 'number' ? stock.dividend_yield : parseFloat(stock.dividend_yield) || 0) >= 3 ? "default" : "secondary"}
                           className={
-                            stock.dividend_yield >= 3
+                            (typeof stock.dividend_yield === 'number' ? stock.dividend_yield : parseFloat(stock.dividend_yield) || 0) >= 3
                               ? "bg-green-700 text-green-100 border-green-600"
                               : "bg-gray-700 text-gray-200 border-gray-600"
                           }
                         >
-                          {stock.dividend_yield.toFixed(2)}%
+                          {(typeof stock.dividend_yield === 'number' ? stock.dividend_yield : parseFloat(stock.dividend_yield) || 0).toFixed(2)}%
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-medium text-green-400">
-                        ${stock.monthly_dividend.toFixed(2)}
+                        ${(typeof stock.monthly_dividend === 'number' ? stock.monthly_dividend : parseFloat(stock.monthly_dividend) || 0).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex justify-center gap-2">

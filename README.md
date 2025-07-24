@@ -1,6 +1,6 @@
 # 📈 Dividend Portfolio Tracker
 
-A full-stack web application for tracking dividend-paying stocks and monitoring portfolio performance. Built with Go, Next.js, and Supabase.
+A full-stack web application for tracking dividend-paying stocks and monitoring portfolio performance. Built with Next.js (including API routes), TypeScript, and Supabase.
 
 ## 🚀 Features
 
@@ -13,29 +13,24 @@ A full-stack web application for tracking dividend-paying stocks and monitoring 
 
 ## 🏗️ Architecture
 
-**Frontend (Next.js 15)**
+**Full-Stack Next.js 15 Application**
 - React 19 with TypeScript
+- Next.js API routes for backend functionality
 - Tailwind CSS v4 for styling
 - Radix UI components
 - Recharts for data visualization
-- Supabase authentication client
-
-**Backend (Go 1.21)**
-- Gin framework HTTP server
-- PostgreSQL database with Supabase
-- JWT authentication
+- JWT authentication with Supabase
 - Financial Modeling Prep API integration
 
 **Database**
 - PostgreSQL via Supabase
 - User authentication and session management
-- Portfolio holdings storage
+- Portfolio holdings storage with Row Level Security
 
 ## 📋 Prerequisites
 
 - **Node.js** (v18 or higher)
-- **Go** (v1.21 or higher)
-- **Docker & Docker Compose** (for containerized development)
+- **Docker & Docker Compose** (for containerized deployment)
 - **Supabase Account** (for database and authentication)
 - **Financial Modeling Prep API Key** (free tier available)
 
@@ -96,35 +91,30 @@ CREATE POLICY \"Users can only access their own holdings\" ON portfolio_holdings
 **Supabase Configuration:**
 1. Go to your Supabase project dashboard
 2. Navigate to Settings > API
-3. Copy the Project URL and anon public key to `.env`
-4. Navigate to Settings > Database
-5. Copy the connection string to `.env` as `DATABASE_URL`
+3. Copy the following to your `.env`:
+   - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
+   - Anon public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - JWT Secret → `SUPABASE_JWT_SECRET`
+   - Service role key → `SUPABASE_SERVICE_ROLE_KEY`
 
 ### 5. Run with Docker (Recommended)
 
 ```bash
-# Build and start all services
+# Build and start the application
 docker-compose up --build
 
-# Access the application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8080
+# Access the application at http://localhost:3000
+# API routes are available at http://localhost:3000/api/*
 ```
 
 ### 6. Manual Development Setup
 
-**Backend:**
-```bash
-cd backend
-go mod tidy
-go run main.go
-```
-
-**Frontend:**
 ```bash
 cd frontend
 npm install
 npm run dev
+
+# Access the application at http://localhost:3000
 ```
 
 ## 🧪 Testing
@@ -146,28 +136,31 @@ cp .env.test.example .env.test
 cd frontend
 npm test
 
-# Backend tests
-cd backend
-go test ./...
+# Type checking
+npx tsc --noEmit
 
-# E2E tests with Playwright
+# Linting
+npm run lint
+
+# E2E tests with Playwright (when configured)
 npm run test:e2e
 ```
 
 ## 📊 API Endpoints
 
+All API endpoints are served through Next.js API routes at `/api/*`:
+
 ### Public Endpoints
-- `GET /` - API information
-- `GET /stockTicker?symbol=TICKER` - Get stock quote
-- `GET /dividends?symbol=TICKER` - Get dividend data
-- `GET /dividendSummary?symbol=TICKER&shares=N` - Get calculated summary
+- `GET /api/stockTicker?symbol=TICKER` - Get stock quote
+- `GET /api/dividends?symbol=TICKER` - Get dividend data
+- `GET /api/dividendSummary?symbol=TICKER&shares=N` - Get calculated summary
 
 ### Protected Endpoints (Require Authentication)
-- `GET /portfolio` - Get user's holdings
-- `POST /portfolio` - Create new holding
-- `PUT /portfolio/:id` - Update holding shares
-- `DELETE /portfolio/:id` - Delete holding
-- `POST /portfolio/refresh` - Refresh all holdings with latest data
+- `GET /api/portfolio` - Get user's holdings
+- `POST /api/portfolio` - Create new holding
+- `PUT /api/portfolio/[id]` - Update holding shares
+- `DELETE /api/portfolio/[id]` - Delete holding
+- `POST /api/portfolio/refresh` - Refresh all holdings with latest data
 
 ## 🚀 Deployment
 
@@ -184,8 +177,7 @@ Update your `.env` file for production:
 
 ```bash
 NODE_ENV=production
-GIN_MODE=release
-NEXT_PUBLIC_API_URL=https://your-domain.com/api
+# Domain configuration is handled by Cloudflare Tunnel
 ```
 
 ### Cloudflare Tunnel (Optional)
@@ -196,34 +188,27 @@ For secure public access without exposing ports:
 2. Add `CF_TOKEN` to your `.env` file
 3. Configure hostname routing:
    - `your-domain.com` → `frontend:3000`
-   - `your-domain.com/api` → `backend:8080`
+   
+The tunnel configuration is included in `docker-compose.yml` and will automatically connect when you provide a valid `CF_TOKEN`.
 
 ## 🔧 Development Commands
 
-**Frontend:**
 ```bash
 cd frontend
 npm run dev          # Start dev server with Turbopack
-npm run build        # Build for production
+npm run build        # Build for production (standalone output)
 npm run start        # Start production server
 npm run lint         # Run ESLint
 npx tsc --noEmit     # TypeScript type checking
 ```
 
-**Backend:**
-```bash
-cd backend
-go run main.go       # Start Go server
-go mod tidy          # Clean up dependencies
-go build             # Build binary
-```
-
 **Docker:**
 ```bash
-docker-compose up --build    # Build and run all services
-docker-compose down          # Stop all services
-docker-compose logs backend  # View backend logs
-docker-compose logs frontend # View frontend logs
+docker-compose up --build         # Build and run application
+docker-compose down               # Stop all services
+docker-compose logs frontend      # View application logs
+docker-compose logs cloudflare-tunnel  # View tunnel logs
+docker-compose -f docker-compose-dev.yml up  # Development mode (no tunnel)
 ```
 
 ## 🛡️ Security
@@ -239,22 +224,25 @@ docker-compose logs frontend # View frontend logs
 
 ```
 dividend_tracker/
-├── backend/                 # Go API server
-│   ├── main.go             # Main application entry point
-│   ├── Dockerfile          # Backend container configuration
-│   └── go.mod              # Go dependencies
-├── frontend/               # Next.js frontend
+├── frontend/                    # Next.js full-stack application
 │   ├── src/
-│   │   ├── app/           # Next.js app router
-│   │   ├── components/    # React components
-│   │   └── lib/           # Utilities and configurations
-│   ├── lib/               # Shared libraries
-│   ├── Dockerfile         # Frontend container configuration
-│   └── package.json       # Node.js dependencies
-├── docker-compose.yml      # Multi-container orchestration
-├── .env.example           # Environment variables template
-├── .env.test.example      # Test environment template
-└── README.md              # This file
+│   │   ├── app/                # Next.js app router
+│   │   │   ├── api/           # API routes
+│   │   │   │   ├── portfolio/ # Portfolio endpoints
+│   │   │   │   ├── utils/     # Auth, DB, and API helpers
+│   │   │   │   └── ...        # Other API endpoints
+│   │   │   └── ...            # Page components
+│   │   ├── components/        # React components
+│   │   └── lib/               # Client utilities
+│   ├── lib/                   # Shared libraries
+│   ├── Dockerfile             # Container configuration
+│   └── package.json           # Dependencies
+├── backend/                    # Legacy Go backend (deprecated)
+├── docker-compose.yml         # Production orchestration
+├── docker-compose-dev.yml     # Development orchestration
+├── .env.example              # Environment template
+├── CLAUDE.md                 # AI assistant instructions
+└── README.md                 # This file
 ```
 
 ## 🤝 Contributing
@@ -273,19 +261,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Common Issues
 
-**Database Connection Issues:**
-- Verify DATABASE_URL format and credentials
-- Check if Supabase project is active
-- Ensure port 6543 (transaction mode) or 5432 (session mode) is accessible
+**Container Health Check Failures:**
+- Ensure all required environment variables are set in `.env`
+- Check container logs: `docker-compose logs frontend`
+- Verify Supabase credentials are correct
+- Increase health check start_period if needed
 
 **API Rate Limits:**
 - Financial Modeling Prep free tier: 250 requests/day
 - Consider upgrading for higher limits in production
 
 **Docker Issues:**
-- Ensure ports 3000 and 8080 are not in use
+- Ensure port 3000 is not in use
 - Check Docker daemon is running
 - Verify environment variables are properly set
+- Use `docker-compose build --no-cache` for clean rebuilds
 
 **Frontend Build Issues:**
 - Clear Next.js cache: `rm -rf .next`
@@ -302,5 +292,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Financial Modeling Prep API](https://financialmodelingprep.com/developer/docs)
 - [Supabase Documentation](https://supabase.com/docs)
 - [Next.js Documentation](https://nextjs.org/docs)
-- [Go Gin Framework](https://gin-gonic.com/)
 - [Docker Compose](https://docs.docker.com/compose/)
+- [TypeScript](https://www.typescriptlang.org/)

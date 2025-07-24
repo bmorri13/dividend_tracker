@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export interface StockQuote {
   symbol: string
@@ -81,17 +81,17 @@ export class ApiService {
   }
 
   static async getStockQuote(symbol: string): Promise<StockQuote> {
-    const url = `${API_BASE_URL}/stockTicker?symbol=${encodeURIComponent(symbol)}`
+    const url = `${API_BASE_URL}/api/stockTicker?symbol=${encodeURIComponent(symbol)}`
     return this.fetchJson<StockQuote>(url)
   }
 
   static async getDividendData(symbol: string): Promise<DividendData> {
-    const url = `${API_BASE_URL}/dividends?symbol=${encodeURIComponent(symbol)}`
+    const url = `${API_BASE_URL}/api/dividends?symbol=${encodeURIComponent(symbol)}`
     return this.fetchJson<DividendData>(url)
   }
 
   static async getDividendSummary(symbol: string, shares: number): Promise<DividendSummary> {
-    const url = `${API_BASE_URL}/dividendSummary?symbol=${encodeURIComponent(symbol)}&shares=${shares}`
+    const url = `${API_BASE_URL}/api/dividendSummary?symbol=${encodeURIComponent(symbol)}&shares=${shares}`
     return this.fetchJson<DividendSummary>(url)
   }
 
@@ -104,12 +104,12 @@ export class ApiService {
 
   // Portfolio CRUD operations
   static async getPortfolioHoldings(): Promise<PortfolioHolding[]> {
-    const url = `${API_BASE_URL}/portfolio`
+    const url = `${API_BASE_URL}/api/portfolio`
     return this.fetchJson<PortfolioHolding[]>(url)
   }
 
   static async createPortfolioHolding(data: CreateHoldingRequest): Promise<PortfolioHolding> {
-    const url = `${API_BASE_URL}/portfolio`
+    const url = `${API_BASE_URL}/api/portfolio`
     return this.fetchJson<PortfolioHolding>(url, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -117,7 +117,7 @@ export class ApiService {
   }
 
   static async updatePortfolioHolding(id: string, data: UpdateHoldingRequest): Promise<PortfolioHolding> {
-    const url = `${API_BASE_URL}/portfolio/${id}`
+    const url = `${API_BASE_URL}/api/portfolio/${id}`
     return this.fetchJson<PortfolioHolding>(url, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -125,14 +125,14 @@ export class ApiService {
   }
 
   static async deletePortfolioHolding(id: string): Promise<void> {
-    const url = `${API_BASE_URL}/portfolio/${id}`
+    const url = `${API_BASE_URL}/api/portfolio/${id}`
     await this.fetchJson(url, {
       method: 'DELETE',
     })
   }
 
   static async refreshPortfolio(): Promise<{message: string, holdings: PortfolioHolding[]}> {
-    const url = `${API_BASE_URL}/portfolio/refresh`
+    const url = `${API_BASE_URL}/api/portfolio/refresh`
     return this.fetchJson(url, {
       method: 'POST',
     })
