@@ -1,0 +1,47 @@
+# Stock Refresh Cronjob Examples
+# Add these to your crontab with: crontab -e
+
+# ========================================
+# BINARY EXECUTION EXAMPLES
+# ========================================
+
+# Daily at 6:00 PM
+0 18 * * * cd /path/to/dividend_tracker/microservices/stock-refresh && ./stock-refresh >> refresh.log 2>&1
+
+# Weekdays at market close (4:30 PM EST)
+30 16 * * 1-5 cd /path/to/dividend_tracker/microservices/stock-refresh && ./stock-refresh >> refresh.log 2>&1
+
+# Multiple times per day (9 AM, 1 PM, 4:30 PM)
+0 9,13 * * 1-5 cd /path/to/dividend_tracker/microservices/stock-refresh && ./stock-refresh >> refresh.log 2>&1
+30 16 * * 1-5 cd /path/to/dividend_tracker/microservices/stock-refresh && ./stock-refresh >> refresh.log 2>&1
+
+# Weekly on Sundays at 8 PM
+0 20 * * 0 cd /path/to/dividend_tracker/microservices/stock-refresh && ./stock-refresh >> refresh.log 2>&1
+
+# ========================================
+# DOCKER EXECUTION EXAMPLES
+# ========================================
+
+# Daily at 6:00 PM using Docker
+0 18 * * * docker run --rm --env-file /path/to/dividend_tracker/.env stock-refresh >> /path/to/dividend_tracker/microservices/stock-refresh/refresh.log 2>&1
+
+# Weekdays at market close using Docker
+30 16 * * 1-5 docker run --rm --env-file /path/to/dividend_tracker/.env stock-refresh >> /path/to/dividend_tracker/microservices/stock-refresh/refresh.log 2>&1
+
+# Multiple times per day using Docker (9 AM, 1 PM, 4:30 PM)
+0 9,13 * * 1-5 docker run --rm --env-file /path/to/dividend_tracker/.env stock-refresh >> /path/to/dividend_tracker/microservices/stock-refresh/refresh.log 2>&1
+30 16 * * 1-5 docker run --rm --env-file /path/to/dividend_tracker/.env stock-refresh >> /path/to/dividend_tracker/microservices/stock-refresh/refresh.log 2>&1
+
+# Weekly on Sundays with Docker cleanup
+0 20 * * 0 docker run --rm --env-file /path/to/dividend_tracker/.env stock-refresh && docker system prune -f >> /path/to/dividend_tracker/microservices/stock-refresh/refresh.log 2>&1
+
+# Docker with background job (runs detached, logs separately)
+0 18 * * * docker run -d --name stock-refresh-$(date +\%Y\%m\%d-\%H\%M) --env-file /path/to/dividend_tracker/.env stock-refresh
+
+# ========================================
+# NOTES
+# ========================================
+# Replace /path/to/dividend_tracker with your actual path
+# For Docker: ensure the stock-refresh image is built with: ./build.sh docker
+# Log output goes to refresh.log in the microservice directory
+# Use docker logs <container-name> to view logs from detached containers
