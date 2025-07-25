@@ -40,7 +40,7 @@ type StockQuote struct {
 	PriceAvg50          float64 `json:"priceAvg50"`
 	PriceAvg200         float64 `json:"priceAvg200"`
 	Volume              int64   `json:"volume"`
-	AvgVolume           int64   `json:"avgVolume"`
+	AvgVolume           float64 `json:"avgVolume"`
 	Exchange            string  `json:"exchange"`
 	Open                float64 `json:"open"`
 	PreviousClose       float64 `json:"previousClose"`

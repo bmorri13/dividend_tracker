@@ -26,6 +26,9 @@ This is a full-stack dividend portfolio tracking application built with:
 - `frontend/lib/supabase.ts` - Supabase client configuration
 - `frontend/src/lib/auth-context.tsx` - Authentication context
 
+**Additional Services:**
+- `microservices/stock-refresh/` - Go service for batch stock price updates (cronjob-ready)
+
 ---
 
 ## Development Commands
@@ -120,12 +123,12 @@ With Next.js API routes, all traffic (including `/api/*` routes) is handled by t
 ## Environment Setup
 
 The project uses a single `.env` file in the project root containing:
-- `FMP_API_KEY` - Financial Modeling Prep API key
-- `SUPABASE_JWT_SECRET` - Supabase JWT secret for token verification
+- `FMP_API_KEY` - Financial Modeling Prep API key (get free key at https://financialmodelingprep.com/developer/docs)
+- `SUPABASE_JWT_SECRET` - Supabase JWT secret for token verification (Dashboard > Settings > API > JWT Secret)
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL (client-side safe)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key (client-side safe)
 - `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key for server-side operations
-- `CF_TOKEN` - Cloudflare tunnel token for deployment
+- `CF_TOKEN` - Cloudflare tunnel token for deployment (optional)
 
 The Next.js API routes use the Supabase client with service role key for database operations and validate JWT tokens using the `SUPABASE_JWT_SECRET`. See `.env.example` for the complete configuration template.
 
@@ -144,6 +147,8 @@ The application uses a `portfolio_holdings` table with columns:
 - `monthly_dividend` (float)
 - `user_id` (UUID, foreign key)
 - `created_at`, `updated_at` (timestamps)
+
+Row Level Security (RLS) is enabled to ensure users can only access their own holdings.
 
 ---
 
@@ -214,6 +219,29 @@ docker logs cloudflared-tunnel
 ```
 - If Cloudflare Tunnel fails to connect, re-issue or verify the `CF_TOKEN` from your Cloudflare Zero Trust dashboard.
 - For API route issues, check the Next.js application logs and ensure all required environment variables are set.
+- Clear Next.js cache if build issues occur: `cd frontend && rm -rf .next`
+- For type errors, run `cd frontend && npx tsc --noEmit` to check TypeScript compilation.
+
+---
+
+## Stock Refresh Microservice
+
+A Go microservice is available for batch updating stock prices and dividend yields:
+
+```bash
+# Build and run manually
+cd microservices/stock-refresh
+./build.sh
+./stock-refresh
+
+# Or use Docker
+./build.sh docker
+docker run --rm --env-file ../../.env stock-refresh
+
+# Setup as cronjob for automated updates
+# Daily at 6 PM
+0 18 * * * cd /path/to/dividend_tracker/microservices/stock-refresh && ./stock-refresh >> refresh.log 2>&1
+```
 
 ---
 
